@@ -1,7 +1,10 @@
 [package]
 name = "cloudflare-ddns"
+description = "Rust-based tool designed to automate the updating of DNS records on Cloudflare."
 version = "0.1.0"
+authors = ["IamBanky <contact@iambanky.com>"]
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
@@ -9,3 +12,15 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 dotenv = "0.15"
+config = "0.14"
+
+[package.metadata.deb]
+maintainer = "IamBanky <contact@iambanky.com>"
+depends = "$auto"
+assets = [
+    ["target/release/cloudflare-ddns", "usr/bin/cloudflare-ddns", "755"],
+    ["systemd/cloudflare-ddns.service", "lib/systemd/system/cloudflare-ddns.service", "644"],
+    ["systemd/cloudflare-ddns.timer",   "lib/systemd/system/cloudflare-ddns.timer",   "644"],
+    ["config/config.toml", "etc/cloudflare-ddns/config.toml", "644"]
+]
+conf-files = ["etc/cloudflare-ddns/config.toml"]

@@ -1,7 +1,15 @@
-use std::env;
+use std::error::Error;
+use config::Config;
 use reqwest::{Client, header::{HeaderMap, HeaderValue, CONTENT_TYPE}};
 use serde::{Deserialize, Serialize};
-use dotenv::dotenv;
+
+#[derive(Debug, Deserialize)]
+struct Settings {
+    zone_id: String,
+    record_name: String,
+    auth_email: String,
+    auth_key: String,
+}
 
 #[derive(Debug, Deserialize)]
 struct DnsRecord {
@@ -25,13 +33,17 @@ struct UpdateRecord<'a> {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv().ok();
+async fn main() -> Result<(), Box<dyn Error>> {
+    // Load config from file
+    let settings: Settings = Config::builder()
+        .add_source(config::File::with_name("/etc/cloudflare-ddns/config.toml")) // will read config.toml
+        .build()?
+        .try_deserialize()?;
 
-    let zone_id = env::var("CF_ZONE_ID")?;
-    let record_name = env::var("CF_RECORD_NAME")?;
-    let auth_email = env::var("CF_AUTH_EMAIL")?;
-    let auth_key = env::var("CF_AUTH_KEY")?;
+    let zone_id = settings.zone_id;
+    let record_name = settings.record_name;
+    let auth_email = settings.auth_email;
+    let auth_key = settings.auth_key;
 
     // 1. Get public IP
     let client1 = Client::builder().use_rustls_tls().build()?;
@@ -51,14 +63,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         zone_id, record_name
     );
 
-    let dns_raw = client
-        .get(&dns_url)
-        .send()
-        .await?
-        .text()
-        .await?;
-
+    let dns_raw = client.get(&dns_url).send().await?.text().await?;
     let dns_resp: RecordResponse = serde_json::from_str(&dns_raw)?;
+
     if dns_resp.result.is_empty() {
         eprintln!("No DNS record found for {}", record_name);
         return Ok(());
@@ -82,11 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
             zone_id, record_id
         );
-        let resp = client
-            .put(&update_url)
-            .json(&update)
-            .send()
-            .await?;
+        let resp = client.put(&update_url).json(&update).send().await?;
 
         println!("Updated DNS: {:?}", resp.status());
     } else {
